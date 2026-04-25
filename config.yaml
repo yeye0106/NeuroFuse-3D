@@ -1,0 +1,24 @@
+# ==========================================
+# ADNI 多模态分类网络 统一配置文件
+# ==========================================
+
+data:
+  csv_path: "multimodal_dataset_final.csv"
+  image_dir: "dataset_final_128"
+  target_shape: [128, 128, 128]
+  batch_size: 8             # 3D CNN 极度吃显存，建议 4 或 8 起步
+  num_workers: 4            # 数据加载的子进程数
+  split_ratio: [0.7, 0.1, 0.2] # 训练集 70%, 验证集 10%, 测试集 20%
+  seed: 42                  # 随机种子，保证每次划分一致，实验可复现
+
+model:
+  clinical_dim: 6           # 临床特征维度 (Age, Sex, Edu, ApoE4, MMSE, CDRSB)
+  num_classes: 3            # 分类数 (AD, CN, MCI)
+  fusion_dim: 128           # 图像特征与临床特征融合前的统一维度
+
+train:
+  epochs: 50
+  learning_rate: 0.0001
+  weight_decay: 0.005       # L2正则化，防止过拟合
+  device: "cuda"            # 如果有GPU则用cuda
+  save_dir: "checkpoints"   # 模型权重保存目录

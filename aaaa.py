@@ -1,0 +1,48 @@
+import pandas as pd
+# pd.set_option('display.max_columns', None)
+# pd.set_option('display.max_rows', None)
+# pd.set_option('display.max_colwidth', None)
+# pd.set_option('display.width', None)
+
+
+df = pd.read_csv("label.csv")
+print("label.csv 内容如下：")
+print(df.head())
+print(df.columns)
+print(df.shape)
+print()
+
+df = pd.read_csv("apoeres.csv")
+print("apoeres.csv 内容如下：")
+print(df.head())
+print(df.columns)
+print(df.shape)
+print()
+
+df = pd.read_csv("cdr.csv")
+print("cdr.csv 内容如下：")
+print(df.head())
+print(df.columns)
+print(df.shape)
+print()
+
+df = pd.read_csv("dxsum.csv")
+print("dxsum.csv 内容如下：")
+print(df.head())
+print(df.columns)
+print(df.shape)
+print()
+
+df = pd.read_csv("mmse.csv")
+print("mmse.csv 内容如下：")
+print(df.head())
+print(df.columns)
+print(df.shape)
+print()
+
+df = pd.read_csv("ptdemog.csv")
+print("ptdemog.csv 内容如下：")
+print(df.head())
+print(df.columns)
+print(df.shape)
+print()

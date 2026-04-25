@@ -1,0 +1,6 @@
+config.yaml	统一配置文件
+dataset.py 定义Dataset数据加载类
+models.py 定义网络，选择最合适跨模态网络
+train.py 训练主脚本（每个epoch都需要输出对应的train loss,acc 以及 val loss,acc）
+eval.py 评估脚本（在测试集上评估训练之后的各个指标）
+utils.py 辅助函数
