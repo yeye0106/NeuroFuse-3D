@@ -3,7 +3,7 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.width', None)
-df = pd.read_csv("label.csv")
+df = pd.read_csv("cleaned_all.csv")
 print(df.head())
 print(df.columns)
 print(df.shape)
@@ -27,5 +27,10 @@ for i in list(df['Description']):
 
 print("Description如下：")
 max_key_len = max(len(key) for key in de)
+de = sorted(de.items(), key=lambda x: x[1], reverse=True)
 for i in de:
-    print(f"{i:<{max_key_len}} : {de[i]}")
+    print(f"{i[0]:<{max_key_len}} : {i[1]}")
+
+# df = df[['Image Data ID', 'Subject', 'Group', 'Sex', 'Age', 'Visit', 'Modality',
+#        'Description', 'Type', 'Acq Date', 'Format']]
+# df.to_csv("cleaned_all.csv", index=False)

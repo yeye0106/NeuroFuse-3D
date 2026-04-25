@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 # --- 配置区 ---
-origin_root = r'C:\all'  # 下载的原始 DICOM 根目
+origin_root = 'dataset'  # 下载的原始 DICOM 根目
 csv_path = 'cleaned_all.csv'  # ADNI 的 CSV 路径录
 output_root = 'dataset_nii'  # 转换后的根目录
 MAX_WORKERS = 8  # 根据 CPU 核心数调整线程数
