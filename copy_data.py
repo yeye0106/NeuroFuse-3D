@@ -5,7 +5,7 @@ from pathlib import Path
 
 # ----------------------------- 配置参数 ---------------------------------
 CSV_PATH = "label.csv"   # 你的CSV文件
-DATA_ROOT = r"D:\desktop\dataset\dataset"                          # 原始数据根目录
+DATA_ROOT = r"C:\all"                          # 原始数据根目录
 TARGET_ROOT = "dataset"                                    # 目标文件夹（相对于脚本运行目录）
 # ----------------------------------------------------------------------
 
