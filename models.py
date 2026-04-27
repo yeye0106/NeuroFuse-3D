@@ -1,51 +1,66 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
-# ==========================================
-# 核心救场组件: 3D 深度可分离卷积
-# 参数量仅为普通 3D 卷积的 1/10，从物理层面掐断过拟合
-# ==========================================
-class DepthwiseSeparableConv3d(nn.Module):
+# 1. 核心特征提取：轻量级深度可分离卷积 + SE 通道注意力
+class LightweightSEBlock3D(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1):
-        super(DepthwiseSeparableConv3d, self).__init__()
-        # Depthwise: 每个通道独立卷积 (学习空间特征)
+        super().__init__()
+        # 深度可分离卷积 (防过拟合)
         self.depthwise = nn.Conv3d(in_channels, in_channels, kernel_size=3, padding=1,
                                    stride=stride, groups=in_channels, bias=False)
-        self.bn1 = nn.InstanceNorm3d(in_channels, affine=True)
-        # Pointwise: 1x1x1 卷积 (学习跨通道特征)
         self.pointwise = nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=False)
-        self.bn2 = nn.InstanceNorm3d(out_channels, affine=True)
-        self.lrelu = nn.LeakyReLU(0.2, inplace=True)
+        self.norm = nn.InstanceNorm3d(out_channels, affine=True)
+        self.act = nn.LeakyReLU(0.2, inplace=True)
+
+        # SE 通道注意力
+        self.se_avg_pool = nn.AdaptiveAvgPool3d(1)
+        self.se_fc = nn.Sequential(
+            nn.Linear(out_channels, out_channels // 4, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(out_channels // 4, out_channels, bias=False),
+            nn.Sigmoid()
+        )
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv3d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.InstanceNorm3d(out_channels, affine=True)
+            )
 
     def forward(self, x):
+        residual = self.shortcut(x)
+
         x = self.depthwise(x)
-        x = self.bn1(x)
-        x = self.lrelu(x)
         x = self.pointwise(x)
-        x = self.bn2(x)
-        x = self.lrelu(x)
-        return x
+        x = self.norm(x)
+        x = self.act(x)
+
+        # 应用 SE 注意力
+        b, c, _, _, _ = x.size()
+        se_weight = self.se_avg_pool(x).view(b, c)
+        se_weight = self.se_fc(se_weight).view(b, c, 1, 1, 1)
+        x = x * se_weight.expand_as(x)
+
+        return x + residual
 
 
-class LightweightImageEncoder(nn.Module):
-    def __init__(self, out_channels=128):  # 整体降维，拒绝冗余特征
-        super(LightweightImageEncoder, self).__init__()
-        # 第一层保留普通卷积，用于提取基础边缘
+class ImageEncoder(nn.Module):
+    def __init__(self, out_channels=128):
+        super().__init__()
         self.init_conv = nn.Sequential(
             nn.Conv3d(1, 16, kernel_size=3, stride=2, padding=1, bias=False),
             nn.InstanceNorm3d(16, affine=True),
             nn.LeakyReLU(0.2, inplace=True)
         )
-
-        # 核心特征提取全部替换为深度可分离卷积
-        self.layer1 = DepthwiseSeparableConv3d(16, 32, stride=2)
-        self.layer2 = DepthwiseSeparableConv3d(32, 64, stride=2)
-        self.layer3 = DepthwiseSeparableConv3d(64, 128, stride=2)
-        self.layer4 = DepthwiseSeparableConv3d(128, out_channels, stride=2)
+        self.layer1 = LightweightSEBlock3D(16, 32, stride=2)
+        self.layer2 = LightweightSEBlock3D(32, 64, stride=2)
+        self.layer3 = LightweightSEBlock3D(64, 128, stride=2)
+        self.layer4 = LightweightSEBlock3D(128, out_channels, stride=2)
 
         self.global_pool = nn.AdaptiveAvgPool3d(1)
-        # 空间 Dropout (Spatial Dropout)，直接丢弃整个通道的特征图
         self.dropout = nn.Dropout3d(p=0.3)
 
     def forward(self, x):
@@ -61,7 +76,7 @@ class LightweightImageEncoder(nn.Module):
 
 class ClinicalEncoder(nn.Module):
     def __init__(self, input_dim=6, out_channels=64):
-        super(ClinicalEncoder, self).__init__()
+        super().__init__()
         self.mlp = nn.Sequential(
             nn.Linear(input_dim, 32),
             nn.LayerNorm(32),
@@ -76,21 +91,22 @@ class ClinicalEncoder(nn.Module):
         return self.mlp(x)
 
 
+# 2. 跨模态融合网络 (GMU 门控机制)
 class CrossModalAttentionNetwork(nn.Module):
     def __init__(self, config=None):
-        super(CrossModalAttentionNetwork, self).__init__()
+        super().__init__()
         self.num_classes = config['model']['num_classes'] if config else 3
         self.clinical_dim = config['model']['clinical_dim'] if config else 6
 
-        img_out_dim = 128
-        clin_out_dim = 64
+        img_dim = 128
+        clin_dim = 64
         hidden_dim = 128
 
-        self.img_encoder = LightweightImageEncoder(out_channels=img_out_dim)
-        self.clin_encoder = ClinicalEncoder(input_dim=self.clinical_dim, out_channels=clin_out_dim)
+        self.img_encoder = ImageEncoder(out_channels=img_dim)
+        self.clin_encoder = ClinicalEncoder(input_dim=self.clinical_dim, out_channels=clin_dim)
 
-        self.img_proj = nn.Linear(img_out_dim, hidden_dim)
-        self.clin_proj = nn.Linear(clin_out_dim, hidden_dim)
+        self.img_proj = nn.Linear(img_dim, hidden_dim)
+        self.clin_proj = nn.Linear(clin_dim, hidden_dim)
 
         self.gate = nn.Sequential(
             nn.Linear(hidden_dim * 2, hidden_dim),
@@ -115,5 +131,4 @@ class CrossModalAttentionNetwork(nn.Module):
         z = self.gate(joint_features)
 
         fused_features = z * i_h + (1 - z) * c_h
-        logits = self.classifier(fused_features)
-        return logits
+        return self.classifier(fused_features)

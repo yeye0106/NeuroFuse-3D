@@ -20,30 +20,29 @@ def train():
     if device.type == 'cuda':
         torch.backends.cudnn.benchmark = True
 
-    print(f"🚀 启动 [轻量级去冗余版] 训练引擎，使用设备: {device}")
+    print(f"🚀 启动 [最终基准定稿版] 训练引擎，使用设备: {device}")
 
     train_loader, val_loader, _ = get_dataloaders("config.yaml")
 
     model = CrossModalAttentionNetwork(config).to(device)
-
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 
-    optimizer = optim.AdamW(
-        model.parameters(),
-        lr=2e-4,
-        weight_decay=1e-3
-    )
+    optimizer = optim.AdamW(model.parameters(), lr=3e-4, weight_decay=1e-3)
 
-    # 极度灵敏的调度器：只要连续 3 轮验证集准确率不上升，立刻将学习率减半
+    # 稳扎稳打的学习率衰减
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='max', factor=0.5, patience=3, min_lr=1e-6
+        optimizer, mode='max', factor=0.5, patience=5, verbose=True, min_lr=1e-6
     )
 
     save_dir = config['train']['save_dir']
     os.makedirs(save_dir, exist_ok=True)
-    best_model_path = os.path.join(save_dir, "best_multimodal_lightweight.pth")
 
-    early_stopping = EarlyStopping(patience=12, mode='max', save_path=best_model_path)
+    # ==========================================
+    # 永远固定保存为 best_model.pth，不再改变！
+    # ==========================================
+    best_model_path = os.path.join(save_dir, "best_model.pth")
+
+    early_stopping = EarlyStopping(patience=15, mode='max', save_path=best_model_path)
 
     epochs = config['train']['epochs']
     scaler = torch.amp.GradScaler('cuda') if device.type == 'cuda' else None
@@ -112,7 +111,6 @@ def train():
         avg_val_loss = val_loss / val_total
         val_acc = val_correct / val_total
 
-        # 严格监控验证集准确率
         scheduler.step(val_acc)
 
         current_lr = optimizer.param_groups[0]['lr']
@@ -121,10 +119,10 @@ def train():
 
         early_stopping(val_acc, model)
         if early_stopping.early_stop:
-            print(f"🛑 触发早停机制！连续 {early_stopping.patience} 轮未打破准确率记录，训练结束。")
+            print(f"🛑 触发早停机制！训练结束。")
             break
 
-    print(f"\n🎉 终极训练流程结束！最强权重已保存在: {best_model_path}")
+    print(f"\n🎉 最终定稿训练流程结束！权重已保存在: {best_model_path}")
 
 
 if __name__ == "__main__":
